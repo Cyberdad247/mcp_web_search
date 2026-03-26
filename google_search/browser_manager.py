@@ -29,10 +29,13 @@ import os
 import platform
 import random
 import time
+import tempfile
+import stat
+from urllib.parse import urlparse
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List, Callable, Coroutine
 
 try:
     # optional: psutil gives accurate memory, fall back if missing  # 可选: psutil 提供更精确的内存信息，缺失时回退
@@ -138,6 +141,10 @@ class BrowserManager:
             "https://www.google.com.au",
         ]
         self.user_data_dir = user_data_dir
+        # Lock to serialize export operations per manager instance (prevents race conditions)
+        self._export_lock: asyncio.Lock = asyncio.Lock()
+        # Track last exported temp file path for optional cleanup
+        self._last_export_file: Optional[str] = None
 
     async def launch_browser(
         self, headless: bool, timeout: int, locale: Optional[str] = None
@@ -713,6 +720,108 @@ class BrowserManager:
         except Exception as e:
             logger.error(f"Failed to export context state: {e}")
             return {}
+
+    async def export_for_crawl4ai(
+        self, context: BrowserContext, urls: List[str], ttl_seconds: int = 60
+    ) -> Tuple[str, Callable[[], Coroutine[Any, Any, None]]]:
+        """Export a filtered storage_state for Crawl4AI consumption.
+
+        - Filters cookies and origins/localStorage to include only the provided URL domains
+          and configured Google domains (so the crawler carries search reputation).
+        - Writes the JSON to a secure temp file (0600 perms) and returns (path, cleanup_coroutine).
+        - Ensures only one export runs at a time via an asyncio.Lock on the manager.
+        """
+        async with self._export_lock:
+            try:
+                state = await context.storage_state()
+                if isinstance(state, str):
+                    try:
+                        state_dict = json.loads(state)
+                    except Exception:
+                        state_dict = {"raw": state}
+                else:
+                    state_dict = state or {}
+
+                # build allowed domain set (netlocs)
+                allowed: set = set()
+                for u in urls:
+                    try:
+                        p = urlparse(u)
+                        if p.netloc:
+                            allowed.add(p.netloc.lower())
+                    except Exception:
+                        pass
+
+                # include google domains
+                for gd in self.google_domains:
+                    try:
+                        p = urlparse(gd)
+                        if p.netloc:
+                            allowed.add(p.netloc.lower())
+                    except Exception:
+                        pass
+
+                # filter cookies: include only those matching allowed domains
+                cookies = state_dict.get("cookies", []) if isinstance(state_dict, dict) else []
+                filtered_cookies = []
+                for c in cookies:
+                    cdom = c.get("domain", "")
+                    cdom_norm = cdom.lstrip(".").lower()
+                    for a in allowed:
+                        if cdom_norm == a or cdom_norm.endswith("." + a) or a.endswith(cdom_norm):
+                            filtered_cookies.append(c)
+                            break
+
+                # filter origins (localStorage entries)
+                origins = state_dict.get("origins", []) if isinstance(state_dict, dict) else []
+                filtered_origins = []
+                for o in origins:
+                    orig = o.get("origin", "")
+                    try:
+                        p = urlparse(orig)
+                        if p.netloc and p.netloc.lower() in allowed:
+                            filtered_origins.append(o)
+                    except Exception:
+                        continue
+
+                filtered_state = {"cookies": filtered_cookies, "origins": filtered_origins}
+
+                # write secure temp file
+                tmp = tempfile.NamedTemporaryFile(mode="w", delete=False, prefix="crawl4ai-state-", suffix=".json", encoding="utf-8")
+                try:
+                    json.dump(filtered_state, tmp, ensure_ascii=False, indent=2)
+                    tmp.flush()
+                    tmp_path = tmp.name
+                finally:
+                    try:
+                        tmp.close()
+                    except Exception:
+                        pass
+
+                # restrict permissions to 0600
+                try:
+                    os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)
+                except Exception:
+                    # best-effort; continue even if chmod fails on some platforms
+                    pass
+
+                # remember the exported file for potential cleanup
+                self._last_export_file = tmp_path
+
+                async def _cleanup():
+                    try:
+                        if self._last_export_file and Path(self._last_export_file).exists():
+                            os.remove(self._last_export_file)
+                    except Exception:
+                        pass
+                    finally:
+                        self._last_export_file = None
+
+                return tmp_path, _cleanup
+
+            except Exception as e:
+                logger.error(f"export_for_crawl4ai failed: {e}")
+                raise
 
 
 # end of file
