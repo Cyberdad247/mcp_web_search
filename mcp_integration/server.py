@@ -275,8 +275,56 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         logger.warning(f"Screenshot failed: {ss_e}")
                         screenshot_path = None
 
-                distiller = ContentDistiller(context=context, page=page)
-                distill_result = await distiller.distill(url, query=query, basic_view=use_basic_view)
+                # Export a minimal, filtered storage_state for Crawl4AI to carry reputation
+                exported_path = None
+                cleanup_func = None
+                try:
+                    try:
+                        exported_path, cleanup_func = await browser_manager.export_for_crawl4ai(context, [url], ttl_seconds=30)
+                        logger.info(f"[INFO] export_for_crawl4ai created: {exported_path}")
+                    except Exception as e:
+                        logger.warning(f"[WARN] export_for_crawl4ai failed: {e}")
+
+                    if exported_path:
+                        # Create an ephemeral Playwright context that uses the exported storage_state
+                        from playwright.async_api import async_playwright
+
+                        p2 = await async_playwright().start()
+                        ctx2 = None
+                        browser2 = None
+                        try:
+                            browser2 = await p2.chromium.launch(headless=True)
+                            ctx2 = await browser2.new_context(storage_state=exported_path)
+                            # Pass the ephemeral context to the distiller so Crawl4AI (or Playwright) can use it
+                            distiller = ContentDistiller(context=ctx2, page=None)
+                            distill_result = await distiller.distill(url, query=query, basic_view=use_basic_view)
+                        finally:
+                            try:
+                                if ctx2 is not None:
+                                    await ctx2.close()
+                            except Exception:
+                                pass
+                            try:
+                                if browser2 is not None:
+                                    await browser2.close()
+                            except Exception:
+                                pass
+                            try:
+                                await p2.stop()
+                            except Exception:
+                                pass
+                    else:
+                        # fallback to using our existing persistent context/page
+                        distiller = ContentDistiller(context=context, page=page)
+                        distill_result = await distiller.distill(url, query=query, basic_view=use_basic_view)
+                finally:
+                    # Ensure exported state file is cleaned up
+                    try:
+                        if cleanup_func:
+                            await cleanup_func()
+                            logger.info("[INFO] export_for_crawl4ai cleanup completed")
+                    except Exception as e:
+                        logger.warning(f"[WARN] export_for_crawl4ai cleanup failed: {e}")
 
                 out = {
                     "markdown": distill_result.get("markdown", ""),
