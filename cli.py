@@ -101,10 +101,10 @@ async def main():
                 args.query,
                 CommandOptions(
                     limit=args.limit,
-                        timeout=args.timeout,
-                        state_file=args.state_file,
-                        no_save_state=args.no_save_state,
-                        basic_view=args.basic_view
+                    timeout=args.timeout,
+                    state_file=args.state_file,
+                    no_save_state=args.no_save_state,
+                    basic_view=args.basic_view
                 ),
                 args.save_html or False,
                 args.html_output
@@ -129,10 +129,10 @@ async def main():
                 args.query,
                 CommandOptions(
                     limit=args.limit,
-                        timeout=args.timeout,
-                        state_file=args.state_file,
-                        no_save_state=args.no_save_state,
-                        basic_view=args.basic_view
+                    timeout=args.timeout,
+                    state_file=args.state_file,
+                    no_save_state=args.no_save_state,
+                    basic_view=args.basic_view
                 )
             )
 
