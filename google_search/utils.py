@@ -58,19 +58,33 @@ async def safe_close_browser(browser, browser_name: str = "浏览器") -> None:
         # 根据不同平台处理不同类型的错误
         if is_windows() and ("pipe" in error_msg or "closed" in error_msg):
             # Windows 上的管道关闭错误，这是正常的，不需要警告
-            logger.debug(f"Windows 系统上的正常资源清理: {e}  (Normal resource cleanup on Windows: {e})")
-        elif is_macos() and ("bad file descriptor" in error_msg or "connection reset" in error_msg):
+            logger.debug(
+                f"Windows 系统上的正常资源清理: {e}  (Normal resource cleanup on Windows: {e})"
+            )
+        elif is_macos() and (
+            "bad file descriptor" in error_msg or "connection reset" in error_msg
+        ):
             # macOS 上的文件描述符错误，通常是正常的
-            logger.debug(f"macOS 系统上的正常资源清理: {e}  (Normal resource cleanup on macOS: {e})")
-        elif is_linux() and ("broken pipe" in error_msg or "connection reset" in error_msg):
+            logger.debug(
+                f"macOS 系统上的正常资源清理: {e}  (Normal resource cleanup on macOS: {e})"
+            )
+        elif is_linux() and (
+            "broken pipe" in error_msg or "connection reset" in error_msg
+        ):
             # Linux 上的管道错误，通常是正常的
-            logger.debug(f"Linux 系统上的正常资源清理: {e}  (Normal resource cleanup on Linux: {e})")
+            logger.debug(
+                f"Linux 系统上的正常资源清理: {e}  (Normal resource cleanup on Linux: {e})"
+            )
         else:
             # 其他错误需要警告
-            logger.warn(f"关闭{browser_name}时发生错误: {e}  (Error closing {browser_name}: {e})")
+            logger.warn(
+                f"关闭{browser_name}时发生错误: {e}  (Error closing {browser_name}: {e})"
+            )
 
 
-async def safe_stop_playwright(playwright_instance, instance_name: str = "Playwright") -> None:
+async def safe_stop_playwright(
+    playwright_instance, instance_name: str = "Playwright"
+) -> None:
     """安全停止 Playwright，处理不同平台的资源清理问题
     Safely stop the Playwright driver handling platform-specific cleanup
     """
@@ -83,16 +97,28 @@ async def safe_stop_playwright(playwright_instance, instance_name: str = "Playwr
         # 根据不同平台处理不同类型的错误
         if is_windows() and ("pipe" in error_msg or "closed" in error_msg):
             # Windows 上的管道关闭错误，这是正常的，不需要警告
-            logger.debug(f"Windows 系统上的正常资源清理: {e}  (Normal resource cleanup on Windows: {e})")
-        elif is_macos() and ("bad file descriptor" in error_msg or "connection reset" in error_msg):
+            logger.debug(
+                f"Windows 系统上的正常资源清理: {e}  (Normal resource cleanup on Windows: {e})"
+            )
+        elif is_macos() and (
+            "bad file descriptor" in error_msg or "connection reset" in error_msg
+        ):
             # macOS 上的文件描述符错误，通常是正常的
-            logger.debug(f"macOS 系统上的正常资源清理: {e}  (Normal resource cleanup on macOS: {e})")
-        elif is_linux() and ("broken pipe" in error_msg or "connection reset" in error_msg):
+            logger.debug(
+                f"macOS 系统上的正常资源清理: {e}  (Normal resource cleanup on macOS: {e})"
+            )
+        elif is_linux() and (
+            "broken pipe" in error_msg or "connection reset" in error_msg
+        ):
             # Linux 上的管道错误，通常是正常的
-            logger.debug(f"Linux 系统上的正常资源清理: {e}  (Normal resource cleanup on Linux: {e})")
+            logger.debug(
+                f"Linux 系统上的正常资源清理: {e}  (Normal resource cleanup on Linux: {e})"
+            )
         else:
             # 其他错误需要警告
-            logger.warn(f"停止{instance_name}时发生错误: {e}  (Error stopping {instance_name}: {e})")
+            logger.warn(
+                f"停止{instance_name}时发生错误: {e}  (Error stopping {instance_name}: {e})"
+            )
 
 
 async def safe_close_context(context, context_name: str = "浏览器上下文") -> None:
@@ -124,89 +150,76 @@ def suppress_platform_resource_warnings():
     import warnings
     import sys
     import os
-    
+
     platform = get_platform_info()
     logger.debug(f"当前平台: {platform}  (Current platform: {platform})")
-    
+
     if is_windows():
         # Windows 特有的警告抑制
         warnings.filterwarnings(
-            "ignore", 
-            message=".*unclosed transport.*", 
-            category=ResourceWarning
+            "ignore", message=".*unclosed transport.*", category=ResourceWarning
         )
         warnings.filterwarnings(
-            "ignore", 
-            message=".*unclosed.*", 
-            category=ResourceWarning
+            "ignore", message=".*unclosed.*", category=ResourceWarning
         )
         logger.debug("已抑制 Windows 管道关闭警告  (Suppressed Windows pipe-closed warnings)")
-        
+
     elif is_macos():
         # macOS 特有的警告抑制
         warnings.filterwarnings(
-            "ignore", 
-            message=".*bad file descriptor.*", 
-            category=ResourceWarning
+            "ignore", message=".*bad file descriptor.*", category=ResourceWarning
         )
         warnings.filterwarnings(
-            "ignore", 
-            message=".*unclosed.*", 
-            category=ResourceWarning
+            "ignore", message=".*unclosed.*", category=ResourceWarning
         )
         logger.debug("已抑制 macOS 文件描述符警告  (Suppressed macOS file-descriptor warnings)")
-        
+
     elif is_linux():
         # Linux 特有的警告抑制
         warnings.filterwarnings(
-            "ignore", 
-            message=".*broken pipe.*", 
-            category=ResourceWarning
+            "ignore", message=".*broken pipe.*", category=ResourceWarning
         )
         warnings.filterwarnings(
-            "ignore", 
-            message=".*unclosed.*", 
-            category=ResourceWarning
+            "ignore", message=".*unclosed.*", category=ResourceWarning
         )
         logger.debug("已抑制 Linux 管道错误警告  (Suppressed Linux pipe error warnings)")
-    
+
     # 通用的资源警告抑制（适用于所有平台）
-    warnings.filterwarnings(
-        "ignore", 
-        message=".*unclosed.*", 
-        category=ResourceWarning
-    )
-    
+    warnings.filterwarnings("ignore", message=".*unclosed.*", category=ResourceWarning)
+
     # 更激进的警告抑制（适用于所有平台）
     warnings.filterwarnings("ignore", category=ResourceWarning)
-    
+
     # 在 Windows 上设置环境变量来抑制管道错误
     if is_windows():
-        os.environ['PYTHONWARNINGS'] = 'ignore::ResourceWarning'
+        os.environ["PYTHONWARNINGS"] = "ignore::ResourceWarning"
         # 设置更激进的错误处理
         import asyncio
-        if hasattr(asyncio, 'WindowsProactorEventLoopPolicy'):
+
+        if hasattr(asyncio, "WindowsProactorEventLoopPolicy"):
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-        
+
         # 猴子补丁来避免管道错误
         try:
             import asyncio.proactor_events
             import asyncio.base_subprocess
-            
+
             # 重写 __del__ 方法来避免管道错误
             def safe_del(self):
                 try:
-                    if hasattr(self, '_sock') and self._sock:
+                    if hasattr(self, "_sock") and self._sock:
                         self._sock = None
-                    if hasattr(self, 'stdin') and self.stdin:
+                    if hasattr(self, "stdin") and self.stdin:
                         self.stdin = None
                 except:
                     pass
-            
+
             # 应用猴子补丁
             asyncio.proactor_events._ProactorBasePipeTransport.__del__ = safe_del
             asyncio.base_subprocess.BaseSubprocessTransport.__del__ = safe_del
-            
-            logger.debug("已应用 Windows 管道错误猴子补丁  (Applied Windows pipe-error monkeypatch)")
+
+            logger.debug(
+                "已应用 Windows 管道错误猴子补丁  (Applied Windows pipe-error monkeypatch)"
+            )
         except Exception as e:
             logger.debug(f"应用猴子补丁失败: {e}  (Failed to apply monkeypatch: {e})")
