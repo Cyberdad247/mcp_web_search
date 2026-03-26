@@ -49,33 +49,31 @@ async def list_tools() -> List[Tool]:
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "搜索查询字符串。为获得最佳结果：1)优先使用英语关键词搜索，因为英语内容通常更丰富、更新更及时，特别是技术和学术领域；2)使用具体关键词而非模糊短语；3)可使用引号\"精确短语\"强制匹配；4)使用site:域名限定特定网站；5)使用-排除词过滤结果；6)使用OR连接备选词；7)优先使用专业术语；8)控制在2-5个关键词以获得平衡结果；9)根据目标内容选择合适的语言（如需要查找特定中文资源时再使用中文）。例如:'climate change report 2024 site:gov -opinion' 或 '\"machine learning algorithms\" tutorial (Python OR Julia)'"
+                        "description": "搜索查询字符串。为获得最佳结果：1)优先使用英语关键词搜索，因为英语内容通常更丰富、更新更及时，特别是技术和学术领域；2)使用具体关键词而非模糊短语；3)可使用引号\"精确短语\"强制匹配；4)使用site:域名限定特定网站；5)使用-排除词过滤结果；6)使用OR连接备选词；7)优先使用专业术语；8)控制在2-5个关键词以获得平衡结果；9)根据目标内容选择合适的语言（如需要查找特定中文资源时再使用中文）。例如:'climate change report 2024 site:gov -opinion' 或 '\"machine learning algorithms\" tutorial (Python OR Julia)'",
                     },
                     "limit": {
                         "type": "number",
                         "description": "返回的搜索结果数量 (默认: 10，建议范围: 1-20)",
-                        "default": 10
+                        "default": 10,
                     },
                     "timeout": {
                         "type": "number",
                         "description": "搜索操作的超时时间(毫秒) (默认: 30000，可根据网络状况调整)",
-                        "default": 30000
-                    }
-                    ,
+                        "default": 30000,
+                    },
                     "basic_view": {
                         "type": "boolean",
                         "description": "是否请求 Google 基本视图 (gbv=1)。在某些验证码/阻断情况下，Basic View 会作为回退选项使用。",
-                        "default": False
-                    }
-                    ,
+                        "default": False,
+                    },
                     "basicView": {
                         "type": "boolean",
                         "description": "Alias for basic_view (camelCase). Whether to request Google Basic View (gbv=1).",
-                        "default": False
-                    }
+                        "default": False,
+                    },
                 },
-                "required": ["query"]
-            }
+                "required": ["query"],
+            },
         ),
         Tool(
             name="get-webpage-html",
@@ -83,23 +81,17 @@ async def list_tools() -> List[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "搜索查询字符串，用于获取目标网页"
-                    },
+                    "query": {"type": "string", "description": "搜索查询字符串，用于获取目标网页"},
                     "saveToFile": {
                         "type": "boolean",
                         "description": "是否将HTML保存到文件",
-                        "default": False
+                        "default": False,
                     },
-                    "outputPath": {
-                        "type": "string",
-                        "description": "HTML输出文件路径（可选）"
-                    }
+                    "outputPath": {"type": "string", "description": "HTML输出文件路径（可选）"},
                 },
-                "required": ["query"]
-            }
-        )
+                "required": ["query"],
+            },
+        ),
     ]
 
 
@@ -115,25 +107,33 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         if name == "google-search":
             # Enforce cooldown after recent CAPTCHA to let IP "heat" dissipate
             now_ts = time.time()
-            if _last_captcha_time and (now_ts - _last_captcha_time) < _captcha_cooldown_seconds:
-                wait_remain = int(_captcha_cooldown_seconds - (now_ts - _last_captcha_time))
-                return [TextContent(
-                    type="text",
-                    text=f"Refusing search: recent CAPTCHA detected. Please wait {wait_remain}s before retrying."
-                )]
+            if (
+                _last_captcha_time
+                and (now_ts - _last_captcha_time) < _captcha_cooldown_seconds
+            ):
+                wait_remain = int(
+                    _captcha_cooldown_seconds - (now_ts - _last_captcha_time)
+                )
+                return [
+                    TextContent(
+                        type="text",
+                        text=f"Refusing search: recent CAPTCHA detected. Please wait {wait_remain}s before retrying.",
+                    )
+                ]
 
             # 提取参数  # Extract parameters
-            query = arguments.get("query", "") # 搜索查询字符串, 必填  # Search query string, required
-            limit = arguments.get("limit", 10) # 默认返回10个结果  # Default to 10 results
-            timeout = arguments.get("timeout", 30000) # 默认30秒超时  # Default 30s timeout
+            query = arguments.get(
+                "query", ""
+            )  # 搜索查询字符串, 必填  # Search query string, required
+            limit = arguments.get("limit", 10)  # 默认返回10个结果  # Default to 10 results
+            timeout = arguments.get("timeout", 30000)  # 默认30秒超时  # Default 30s timeout
             # Accept either snake_case `basic_view` or camelCase `basicView` from callers
-            basic_view = bool(arguments.get("basic_view", arguments.get("basicView", False)))
+            basic_view = bool(
+                arguments.get("basic_view", arguments.get("basicView", False))
+            )
 
             if not query:
-                return [TextContent(
-                    type="text",
-                    text="错误：搜索查询不能为空"
-                )]
+                return [TextContent(type="text", text="错误：搜索查询不能为空")]
 
             logger.info(f"收到搜索请求: query={query}, limit={limit}, timeout={timeout}")
 
@@ -148,9 +148,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                             limit=limit,
                             timeout=timeout,
                             basic_view=basic_view,
-                        )
+                        ),
                     ),
-                    timeout=timeout / 1000 + 60  # 搜索超时 + 60秒额外时间
+                    timeout=timeout / 1000 + 60,  # 搜索超时 + 60秒额外时间
                 )
 
                 # 格式化结果
@@ -164,26 +164,27 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     result_text += f"   摘要: {result.snippet}\n\n"
 
                 # If the search result indicates a CAPTCHA failure, record the time so subsequent requests are cooled down
-                if search_result.results and len(search_result.results) > 0 and search_result.results[0].title.startswith("Search failed (CAPTCHA)"):
+                if (
+                    search_result.results
+                    and len(search_result.results) > 0
+                    and search_result.results[0].title.startswith(
+                        "Search failed (CAPTCHA)"
+                    )
+                ):
                     # record last captcha time at module scope
                     _last_captcha_time = time.time()
 
-                return [TextContent(
-                    type="text",
-                    text=result_text
-                )]
+                return [TextContent(type="text", text=result_text)]
 
             except asyncio.TimeoutError:
-                return [TextContent(
-                    type="text",
-                    text=f"搜索超时: 查询 '{query}' 在 {timeout}ms 内未完成"
-                )]
+                return [
+                    TextContent(
+                        type="text", text=f"搜索超时: 查询 '{query}' 在 {timeout}ms 内未完成"
+                    )
+                ]
             except Exception as e:
                 logger.error(f"搜索失败: {e}")
-                return [TextContent(
-                    type="text",
-                    text=f"搜索失败: {str(e)}"
-                )]
+                return [TextContent(type="text", text=f"搜索失败: {str(e)}")]
 
         elif name == "get-webpage-html":
             # 提取参数  # Extract parameters
@@ -192,10 +193,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             output_path = arguments.get("outputPath")
 
             if not query:
-                return [TextContent(
-                    type="text",
-                    text="错误：搜索查询不能为空"
-                )]
+                return [TextContent(type="text", text="错误：搜索查询不能为空")]
 
             logger.info(f"收到HTML获取请求: query={query}, saveToFile={save_to_file}")
 
@@ -205,12 +203,9 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 # 使用超时控制防止无限等待
                 html_result = await asyncio.wait_for(
                     get_google_search_page_html(
-                        query,
-                        CommandOptions(),
-                        save_to_file,
-                        output_path
+                        query, CommandOptions(), save_to_file, output_path
                     ),
-                    timeout=60000 / 1000 + 60  # 60秒超时 + 60秒额外时间
+                    timeout=60000 / 1000 + 60,  # 60秒超时 + 60秒额外时间
                 )
 
                 # 格式化结果
@@ -227,43 +222,35 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     result_text += f"截图路径: {html_result.screenshot_path}\n"
 
                 result_text += f"\nHTML内容预览 (前500字符):\n"
-                result_text += html_result.html[:500] + "..." if len(html_result.html) > 500 else html_result.html
+                result_text += (
+                    html_result.html[:500] + "..."
+                    if len(html_result.html) > 500
+                    else html_result.html
+                )
 
-                return [TextContent(
-                    type="text",
-                    text=result_text
-                )]
+                return [TextContent(type="text", text=result_text)]
 
             except asyncio.TimeoutError:
-                return [TextContent(
-                    type="text",
-                    text=f"HTML获取超时: 查询 '{query}' 在60秒内未完成"
-                )]
+                return [
+                    TextContent(type="text", text=f"HTML获取超时: 查询 '{query}' 在60秒内未完成")
+                ]
             except Exception as e:
                 logger.error(f"HTML获取失败: {e}")
-                return [TextContent(
-                    type="text",
-                    text=f"HTML获取失败: {str(e)}"
-                )]
+                return [TextContent(type="text", text=f"HTML获取失败: {str(e)}")]
 
         else:
-            return [TextContent(
-                type="text",
-                text=f"未知工具: {name}"
-            )]
+            return [TextContent(type="text", text=f"未知工具: {name}")]
 
     except Exception as e:
         logger.error(f"工具调用失败: {e}")
-        return [TextContent(
-            type="text",
-            text=f"工具调用失败: {str(e)}"
-        )]
+        return [TextContent(type="text", text=f"工具调用失败: {str(e)}")]
 
 
 async def main():
     """主函数
     Main entrypoint for the MCP server
     """
+
     # 设置信号处理
     def signal_handler(signum, frame):
         logger.info("收到退出信号，正在关闭服务器...  (Shutdown signal received; closing server)")
@@ -272,14 +259,14 @@ async def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    logger.info("启动Google搜索MCP服务器...  (Starting Google Search MCP server)")  # Starting Google Search MCP server...
+    logger.info(
+        "启动Google搜索MCP服务器...  (Starting Google Search MCP server)"
+    )  # Starting Google Search MCP server...
 
     # 启动服务器
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options()
+            read_stream, write_stream, server.create_initialization_options()
         )
 
 

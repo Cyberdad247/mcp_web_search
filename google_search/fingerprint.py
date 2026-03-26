@@ -26,29 +26,29 @@ except ImportError:
                 "viewport": {"width": 1920, "height": 1080},
                 "device_scale_factor": 1,
                 "is_mobile": False,
-                "has_touch": False
+                "has_touch": False,
             },
             "Desktop Edge": {
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
                 "viewport": {"width": 1920, "height": 1080},
                 "device_scale_factor": 1,
                 "is_mobile": False,
-                "has_touch": False
+                "has_touch": False,
             },
             "Desktop Firefox": {
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
                 "viewport": {"width": 1920, "height": 1080},
                 "device_scale_factor": 1,
                 "is_mobile": False,
-                "has_touch": False
+                "has_touch": False,
             },
             "Desktop Safari": {
                 "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
                 "viewport": {"width": 1920, "height": 1080},
                 "device_scale_factor": 1,
                 "is_mobile": False,
-                "has_touch": False
-            }
+                "has_touch": False,
+            },
         }
 
 
@@ -72,6 +72,7 @@ def get_host_machine_config(user_locale: str = None) -> FingerprintConfig:
     # 获取系统时区
     # Python doesn't provide IANA timezone directly; infer by offset (best-effort)  # Python 无法直接提供 IANA 时区；通过偏移量进行推断（尽力而为）
     import time
+
     timezone_offset = -time.timezone // 60  # 转换为分钟，与UTC的差值，负值表示东区
     timezone_id = "Asia/Shanghai"  # 默认使用上海时区
 
@@ -132,7 +133,7 @@ def get_host_machine_config(user_locale: str = None) -> FingerprintConfig:
         timezone_id=timezone_id,
         color_scheme=color_scheme,
         reduced_motion=reduced_motion,
-        forced_colors=forced_colors
+        forced_colors=forced_colors,
     )
 
 
@@ -145,14 +146,19 @@ def get_device_config(saved_state_fingerprint=None) -> Tuple[str, Dict[str, Any]
         "Desktop Chrome",
         "Desktop Edge",
         "Desktop Firefox",
-        "Desktop Safari"
+        "Desktop Safari",
     ]
-    
-    if (saved_state_fingerprint and
-        saved_state_fingerprint.device_name and
-        saved_state_fingerprint.device_name in playwright_devices):
+
+    if (
+        saved_state_fingerprint
+        and saved_state_fingerprint.device_name
+        and saved_state_fingerprint.device_name in playwright_devices
+    ):
         # 使用保存的设备配置
-        return saved_state_fingerprint.device_name, playwright_devices[saved_state_fingerprint.device_name]
+        return (
+            saved_state_fingerprint.device_name,
+            playwright_devices[saved_state_fingerprint.device_name],
+        )
     else:
         # 随机选择一个设备
         random_device = random.choice(device_list)
@@ -160,6 +166,5 @@ def get_device_config(saved_state_fingerprint=None) -> Tuple[str, Dict[str, Any]
 
 
 def get_random_delay(min_val: int, max_val: int) -> int:
-    """获取随机延迟时间  # Get a random delay value in milliseconds
-    """
-    return random.randint(min_val, max_val) 
+    """获取随机延迟时间  # Get a random delay value in milliseconds"""
+    return random.randint(min_val, max_val)

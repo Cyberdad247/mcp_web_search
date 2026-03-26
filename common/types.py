@@ -11,6 +11,7 @@ class SearchResult:
     """搜索结果
     Search result
     """
+
     title: str
     link: str
     snippet: str
@@ -21,6 +22,7 @@ class SearchResponse:
     """搜索响应
     Search response
     """
+
     query: str
     results: List[SearchResult]
 
@@ -30,6 +32,7 @@ class CommandOptions:
     """命令行选项
     Command line options
     """
+
     limit: Optional[int] = None
     timeout: Optional[int] = None
     state_file: Optional[str] = None
@@ -45,6 +48,7 @@ class HtmlResponse:
     """HTML响应
     HTML response
     """
+
     query: str
     html: str
     url: str
@@ -58,6 +62,7 @@ class FingerprintConfig:
     """浏览器指纹配置
     Browser fingerprint configuration
     """
+
     device_name: str
     locale: str
     timezone_id: str
@@ -71,5 +76,6 @@ class SavedState:
     """保存的浏览器状态
     Saved browser state
     """
+
     fingerprint: Optional[FingerprintConfig] = None
     google_domain: Optional[str] = None

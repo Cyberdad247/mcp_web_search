@@ -6,9 +6,7 @@ from mcp import ClientSession, StdioServerParameters
 
 async def main():
     server_params = StdioServerParameters(
-        command=sys.executable,
-        args=['-m', 'mcp_integration.server'],
-        env=None
+        command=sys.executable, args=["-m", "mcp_integration.server"], env=None
     )
 
     async with stdio_client(server_params) as transport:
@@ -18,18 +16,21 @@ async def main():
             print("✅ Connected to MCP server, calling get-webpage-html tool...")
 
             try:
-                result = await session.call_tool('get-webpage-html', {
-                    'query': 'mcp smoke test html',
-                    'saveToFile': True,
-                    'outputPath': './mcp_html_output'
-                })
+                result = await session.call_tool(
+                    "get-webpage-html",
+                    {
+                        "query": "mcp smoke test html",
+                        "saveToFile": True,
+                        "outputPath": "./mcp_html_output",
+                    },
+                )
 
                 print("--- Tool result (repr) ---")
                 print(repr(result))
                 print("--- Tool result (text items) ---")
 
                 content_items = None
-                if hasattr(result, 'content') and result.content:
+                if hasattr(result, "content") and result.content:
                     content_items = result.content
                 elif isinstance(result, (list, tuple)):
                     content_items = result
@@ -47,5 +48,5 @@ async def main():
                 print(f"Tool call failed: {e}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())

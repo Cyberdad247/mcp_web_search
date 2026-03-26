@@ -29,72 +29,45 @@ async def main():
     """
     # 创建命令行解析器  # Create argument parser
     parser = argparse.ArgumentParser(
-        prog="google-search-cli",
-        description="基于 Playwright 的 Google 搜索 CLI 工具"
+        prog="google-search-cli", description="基于 Playwright 的 Google 搜索 CLI 工具"
     )
 
     # 配置命令行选项  # Configure command line options
+    parser.add_argument("query", help="搜索关键词")
+    parser.add_argument("-l", "--limit", type=int, default=10, help="结果数量限制 (默认: 10)")
     parser.add_argument(
-        "query",
-        help="搜索关键词"
+        "-t", "--timeout", type=int, default=30000, help="超时时间(毫秒) (默认: 30000)"
     )
     parser.add_argument(
-        "-l", "--limit",
-        type=int,
-        default=10,
-        help="结果数量限制 (默认: 10)"
-    )
-    parser.add_argument(
-        "-t", "--timeout",
-        type=int,
-        default=30000,
-        help="超时时间(毫秒) (默认: 30000)"
-    )
-    parser.add_argument(
-        "--no-headless",
-        action="store_true",
-        help="已废弃: 总是先尝试无头模式，如果遇到人机验证会自动切换到有头模式"
+        "--no-headless", action="store_true", help="已废弃: 总是先尝试无头模式，如果遇到人机验证会自动切换到有头模式"
     )
     parser.add_argument(
         "--state-file",
         default="./browser-state.json",
-        help="浏览器状态文件路径 (默认: ./browser-state.json)"
+        help="浏览器状态文件路径 (默认: ./browser-state.json)",
     )
+    parser.add_argument("--no-save-state", action="store_true", help="不保存浏览器状态")
     parser.add_argument(
-        "--no-save-state",
-        action="store_true",
-        help="不保存浏览器状态"
-    )
-    parser.add_argument(
-        "-b", "--basic-view", "--gbv",
+        "-b",
+        "--basic-view",
+        "--gbv",
         dest="basic_view",
         action="store_true",
-        help="使用 Google Basic Variant (gbv=1)，绕过 JS 驱动的检测（较小、无 JS 的旧界面）。别名: -b, --gbv"
+        help="使用 Google Basic Variant (gbv=1)，绕过 JS 驱动的检测（较小、无 JS 的旧界面）。别名: -b, --gbv",
     )
     parser.add_argument(
         "--manual-captcha",
         dest="manual_captcha",
         action="store_true",
-        help="允许在检测到 CAPTCHA 时进行交互式手动解答（会阻塞直到用户在终端按回车）。仅在交互式会话中有效。"
+        help="允许在检测到 CAPTCHA 时进行交互式手动解答（会阻塞直到用户在终端按回车）。仅在交互式会话中有效。",
     )
     parser.add_argument(
-        "--get-html",
-        action="store_true",
-        help="获取搜索结果页面的原始HTML而不是解析结果"
+        "--get-html", action="store_true", help="获取搜索结果页面的原始HTML而不是解析结果"
     )
+    parser.add_argument("--save-html", action="store_true", help="将HTML保存到文件")
+    parser.add_argument("--html-output", help="HTML输出文件路径")
     parser.add_argument(
-        "--save-html",
-        action="store_true",
-        help="将HTML保存到文件"
-    )
-    parser.add_argument(
-        "--html-output",
-        help="HTML输出文件路径"
-    )
-    parser.add_argument(
-        "-V", "--version",
-        action="version",
-        version=f"%(prog)s {get_version()}"
+        "-V", "--version", action="version", version=f"%(prog)s {get_version()}"
     )
 
     # 解析命令行参数  # Parse command line arguments
@@ -111,25 +84,35 @@ async def main():
                     state_file=args.state_file,
                     no_save_state=args.no_save_state,
                     basic_view=args.basic_view,
-                    manual_captcha=args.manual_captcha
+                    manual_captcha=args.manual_captcha,
                 ),
                 args.save_html or False,
-                args.html_output
+                args.html_output,
             )
 
             # 输出HTML结果  # Print HTML result
-            print(json.dumps({
-                "query": html_result.query,
-                "url": html_result.url,
-                "html_length": len(html_result.html),
-                "saved_path": html_result.saved_path,
-                "screenshot_path": html_result.screenshot_path
-            }, indent=2, ensure_ascii=False))
+            print(
+                json.dumps(
+                    {
+                        "query": html_result.query,
+                        "url": html_result.url,
+                        "html_length": len(html_result.html),
+                        "saved_path": html_result.saved_path,
+                        "screenshot_path": html_result.screenshot_path,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
 
             if args.save_html:
-                print(f"\nHTML已保存到: {html_result.saved_path}  (HTML saved to: {html_result.saved_path})")
+                print(
+                    f"\nHTML已保存到: {html_result.saved_path}  (HTML saved to: {html_result.saved_path})"
+                )
                 if html_result.screenshot_path:
-                    print(f"截图已保存到: {html_result.screenshot_path}  (Screenshot saved to: {html_result.screenshot_path})")
+                    print(
+                        f"截图已保存到: {html_result.screenshot_path}  (Screenshot saved to: {html_result.screenshot_path})"
+                    )
         else:
             # 执行搜索  # Execute search
             search_result = await google_search(
@@ -140,22 +123,28 @@ async def main():
                     state_file=args.state_file,
                     no_save_state=args.no_save_state,
                     basic_view=args.basic_view,
-                    manual_captcha=args.manual_captcha
-                )
+                    manual_captcha=args.manual_captcha,
+                ),
             )
 
             # 输出搜索结果  # Print search results
-            print(json.dumps({
-                "query": search_result.query,
-                "results": [
+            print(
+                json.dumps(
                     {
-                        "title": result.title,
-                        "link": result.link,
-                        "snippet": result.snippet
-                    }
-                    for result in search_result.results
-                ]
-            }, indent=2, ensure_ascii=False))
+                        "query": search_result.query,
+                        "results": [
+                            {
+                                "title": result.title,
+                                "link": result.link,
+                                "snippet": result.snippet,
+                            }
+                            for result in search_result.results
+                        ],
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
 
     except KeyboardInterrupt:
         print("\n搜索被用户中断  (Search interrupted by user)")

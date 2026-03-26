@@ -16,12 +16,12 @@ class ColoredFormatter(logging.Formatter):
     """
 
     COLORS = {
-        'DEBUG': '\033[36m',      # 青色
-        'INFO': '\033[32m',       # 绿色
-        'WARNING': '\033[33m',    # 黄色
-        'ERROR': '\033[31m',      # 红色
-        'CRITICAL': '\033[35m',   # 紫色
-        'RESET': '\033[0m'        # 重置
+        "DEBUG": "\033[36m",  # 青色
+        "INFO": "\033[32m",  # 绿色
+        "WARNING": "\033[33m",  # 黄色
+        "ERROR": "\033[31m",  # 红色
+        "CRITICAL": "\033[35m",  # 紫色
+        "RESET": "\033[0m",  # 重置
     }
 
     def format(self, record):
@@ -32,14 +32,17 @@ class ColoredFormatter(logging.Formatter):
 
         # 添加时间戳
         # Add timestamp
-        record.asctime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        record.asctime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         return super().format(record)
 
 
-def setup_logger(name: str = f"google_search_{datetime.now().strftime('%Y-%m-%d')}", level: str = "INFO") -> logging.Logger:
+def setup_logger(
+    name: str = f"google_search_{datetime.now().strftime('%Y-%m-%d')}",
+    level: str = "INFO",
+) -> logging.Logger:
     """设置日志器
-    Setup and return a configured logger  
+    Setup and return a configured logger
     返回配置好的 logger 实例
     """
 
@@ -61,23 +64,22 @@ def setup_logger(name: str = f"google_search_{datetime.now().strftime('%Y-%m-%d'
     # 检测是否为Windows环境，如果是则不使用颜色
     # Detect Windows environment; avoid ANSI colors on Windows
     import platform
-    is_windows = platform.system().lower() == 'windows'
-    
+
+    is_windows = platform.system().lower() == "windows"
+
     if is_windows:
         # Windows环境下使用无颜色格式
         # Use non-colored format on Windows
         console_formatter = logging.Formatter(
-            '%(asctime)s [%(levelname)s] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
     else:
         # 非Windows环境下使用彩色格式
         # Use colored format on non-Windows platforms
         console_formatter = ColoredFormatter(
-            '%(asctime)s [%(levelname)s] %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            "%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
-    
+
     console_handler.setFormatter(console_formatter)
 
     # 创建文件处理器
@@ -86,14 +88,13 @@ def setup_logger(name: str = f"google_search_{datetime.now().strftime('%Y-%m-%d'
     log_dir.mkdir(exist_ok=True)
 
     log_file = log_dir / f"{name}.log"
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
 
     # 设置文件格式
     # Set file formatter
     file_formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     file_handler.setFormatter(file_formatter)
 
@@ -121,18 +122,23 @@ signal.signal(signal.SIGTERM, signal_handler)
 # 创建默认日志器  # Create default logger
 _logger = setup_logger()
 
+
 # 导出日志函数  # Export logging wrapper functions
 def info(message):
     _logger.info(message)
 
+
 def warn(message):
     _logger.warning(message)
+
 
 def error(message):
     _logger.error(message)
 
+
 def debug(message):
     _logger.debug(message)
+
 
 def critical(message):
     _logger.critical(message)
