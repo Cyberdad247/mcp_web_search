@@ -116,3 +116,13 @@ user_data/
 # Log files
 *.log
 
+# Docker images / local container artifacts
+*.tar
+docker-compose.override.yml
+docker-compose.*.yml
+**/mcp_web_search:ubuntu
+mcp_web_search:ubuntu
+mcp-stealth-search:latest
+*.tar.gz
+*.tgz
+
