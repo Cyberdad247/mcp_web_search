@@ -24,6 +24,9 @@ user_data/
 browser-state.json
 browser-state-fingerprint.json
 
+# Ignore local instruction overrides
+.github/instructions/
+
 # Logs
 *.log
 
