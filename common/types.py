@@ -37,6 +37,7 @@ class CommandOptions:
     locale: Optional[str] = None
     headless: Optional[bool] = None
     basic_view: Optional[bool] = None
+    manual_captcha: Optional[bool] = None
 
 
 @dataclass

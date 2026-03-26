@@ -69,6 +69,8 @@ async def google_search(
     use_headless = True
     # basic_view: whether to use Google Basic Variant (gbv=1)
     basic_view = bool(options.basic_view) if getattr(options, 'basic_view', None) is not None else False
+    # manual_captcha: whether to allow interactive manual CAPTCHA solving (blocks until user input)
+    manual_captcha = bool(options.manual_captcha) if getattr(options, 'manual_captcha', None) is not None else False
 
     logger.info(f"Initializing browser... options: limit={limit}, timeout={timeout}, stateFile={state_file}, noSaveState={no_save_state}, locale={locale}")
 
@@ -93,6 +95,7 @@ async def google_search(
         browser_manager=browser_manager,
         search_executor=search_executor,
         attempts_remaining=3,
+        manual_captcha=manual_captcha,
     )
 
 
@@ -111,6 +114,7 @@ async def _perform_search_internal(
     browser_manager: BrowserManager = None,
     search_executor: SearchExecutor = None,
     attempts_remaining: int = 3,
+    manual_captcha: bool = False,
 ) -> SearchResponse:
     """内部搜索函数，处理浏览器启动和 CAPTCHA 重试逻辑
     Internal helper that handles browser startup and CAPTCHA/verification retry logic
@@ -208,8 +212,9 @@ async def _perform_search_internal(
                 except Exception:
                     pass
 
-            # If running interactively, open a headful persistent context and prompt the user to solve CAPTCHA.
-            if sys.stdin is not None and sys.stdin.isatty():
+            # If running interactively and caller allows manual solving, open a headful persistent context and prompt the user to solve CAPTCHA.
+            # Guarded by `manual_captcha` to avoid blocking the event loop for programmatic callers.
+            if manual_captcha and sys.stdin is not None and sys.stdin.isatty():
                 try:
                     logger.info("Interactive session detected — launching headful browser for manual CAPTCHA solve...")
                     p_manual, context_manual = await browser_manager.launch_browser(False, timeout, locale)

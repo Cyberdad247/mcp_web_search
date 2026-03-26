@@ -72,6 +72,12 @@ async def main():
         help="使用 Google Basic Variant (gbv=1)，绕过 JS 驱动的检测（较小、无 JS 的旧界面）。别名: -b, --gbv"
     )
     parser.add_argument(
+        "--manual-captcha",
+        dest="manual_captcha",
+        action="store_true",
+        help="允许在检测到 CAPTCHA 时进行交互式手动解答（会阻塞直到用户在终端按回车）。仅在交互式会话中有效。"
+    )
+    parser.add_argument(
         "--get-html",
         action="store_true",
         help="获取搜索结果页面的原始HTML而不是解析结果"
@@ -104,7 +110,8 @@ async def main():
                     timeout=args.timeout,
                     state_file=args.state_file,
                     no_save_state=args.no_save_state,
-                    basic_view=args.basic_view
+                    basic_view=args.basic_view,
+                    manual_captcha=args.manual_captcha
                 ),
                 args.save_html or False,
                 args.html_output
@@ -132,7 +139,8 @@ async def main():
                     timeout=args.timeout,
                     state_file=args.state_file,
                     no_save_state=args.no_save_state,
-                    basic_view=args.basic_view
+                    basic_view=args.basic_view,
+                    manual_captcha=args.manual_captcha
                 )
             )
 
