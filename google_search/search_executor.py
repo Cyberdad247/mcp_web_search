@@ -3,12 +3,13 @@
 Search execution module
 """
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from playwright.async_api import Page
 from common.types import SearchResult
 from common import logger
 from .fingerprint import get_random_delay
+from .distiller import ContentDistiller
 
 
 class SearchExecutor:
@@ -482,3 +483,28 @@ class SearchExecutor:
             )
             for result in raw_results
         ]
+
+    async def distill_result(self, context_or_page: Any, url: str, query: Optional[str] = None, basic_view: bool = False) -> dict:
+        """Distill the page at `url` using the provided BrowserContext or Page.
+
+        Returns a dict: {"title":..., "url":..., "markdown":...}
+        """
+        # Determine whether the provided object is a Page or a BrowserContext
+        page = None
+        context = None
+        try:
+            # Playwright Page has `goto`; BrowserContext has `new_page`
+            if hasattr(context_or_page, "goto"):
+                page = context_or_page
+            elif hasattr(context_or_page, "new_page"):
+                context = context_or_page
+            else:
+                # Unknown type; try to use as context
+                context = context_or_page
+
+            distiller = ContentDistiller(context=context, page=page)
+            result = await distiller.distill(url, query=query, basic_view=basic_view)
+            return result
+        except Exception as e:
+            logger.error(f"Distillation failed for {url}: {e}")
+            return {"title": "", "url": url, "markdown": ""}

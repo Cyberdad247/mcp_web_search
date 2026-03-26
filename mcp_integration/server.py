@@ -20,6 +20,21 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 from google_search.engine import google_search, get_google_search_page_html
+from google_search.browser_manager import BrowserManager, MAX_CONCURRENT_CRAWLS
+from urllib.parse import urlparse
+
+# Concurrency control for crawls
+_crawl_semaphore: asyncio.Semaphore = asyncio.Semaphore(MAX_CONCURRENT_CRAWLS if MAX_CONCURRENT_CRAWLS and isinstance(MAX_CONCURRENT_CRAWLS, int) else 2)
+
+# Per-domain last crawl times to enforce politeness delays
+_last_crawl_times: Dict[str, float] = {}
+# Politeness delay (seconds) between requests to the same domain
+_POLITENESS_DELAY_SECONDS: float = 2.0
+# Per-domain locks to serialize requests to the same host
+_domain_locks: Dict[str, asyncio.Lock] = {}
+from google_search.distiller import ContentDistiller
+from google_search.search_executor import SearchExecutor
+from google_search.utils import safe_stop_playwright, safe_close_context, safe_close_page
 from common.types import CommandOptions
 from common import logger
 
@@ -82,14 +97,27 @@ async def list_tools() -> List[Tool]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "搜索查询字符串，用于获取目标网页"},
-                    "saveToFile": {
-                        "type": "boolean",
-                        "description": "是否将HTML保存到文件",
-                        "default": False,
-                    },
+                    "saveToFile": {"type": "boolean", "description": "是否将HTML保存到文件", "default": False},
                     "outputPath": {"type": "string", "description": "HTML输出文件路径（可选）"},
                 },
                 "required": ["query"],
+            },
+        ),
+        Tool(
+            name="get-webpage-markdown",
+            description="深度阅读并将网页提炼为Markdown，适用于LLM消费（优先使用Crawl4AI，失败时回退）。Returns JSON with markdown, metadata and screenshot_path.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "目标网页的完整URL"},
+                    "query": {"type": "string", "description": "可选的搜索/意图字符串，用于内容优先级排序（Crawl4AI）"},
+                    "use_basic_view": {"type": "boolean", "description": "是否使用 basic view (gbv=1) 以绕过反爬虫强阻断", "default": False},
+                    "useBasicView": {"type": "boolean", "description": "Alias for use_basic_view (camelCase)", "default": False},
+                    "timeout": {"type": "number", "description": "导航/提取超时时间(毫秒)", "default": 60000},
+                    "saveScreenshot": {"type": "boolean", "description": "是否保存页面截图", "default": True},
+                    "outputPath": {"type": "string", "description": "可选的截图输出路径（文件或目录）"},
+                },
+                "required": ["url"],
             },
         ),
     ]
@@ -97,119 +125,46 @@ async def list_tools() -> List[Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-    """处理工具调用
-    Handle tool invocations
-    """
-
     try:
-        # Ensure we can update the module-level CAPTCHA timestamp
-        global _last_captcha_time
         if name == "google-search":
-            # Enforce cooldown after recent CAPTCHA to let IP "heat" dissipate
-            now_ts = time.time()
-            if (
-                _last_captcha_time
-                and (now_ts - _last_captcha_time) < _captcha_cooldown_seconds
-            ):
-                wait_remain = int(
-                    _captcha_cooldown_seconds - (now_ts - _last_captcha_time)
-                )
+            query = arguments.get("query", "")
+            limit = int(arguments.get("limit", 10))
+            timeout = int(arguments.get("timeout", 30000))
+            basic_view = bool(arguments.get("basic_view", arguments.get("basicView", False)))
+
+            global _last_captcha_time
+            if time.time() - _last_captcha_time < _captcha_cooldown_seconds:
                 return [
                     TextContent(
                         type="text",
-                        text=f"Refusing search: recent CAPTCHA detected. Please wait {wait_remain}s before retrying.",
+                        text=json.dumps({"error": {"reason": "cooldown", "message": "Cooldown after recent CAPTCHA"}}, ensure_ascii=False),
                     )
                 ]
 
-            # 提取参数  # Extract parameters
-            query = arguments.get(
-                "query", ""
-            )  # 搜索查询字符串, 必填  # Search query string, required
-            limit = arguments.get("limit", 10)  # 默认返回10个结果  # Default to 10 results
-            timeout = arguments.get("timeout", 30000)  # 默认30秒超时  # Default 30s timeout
-            # Accept either snake_case `basic_view` or camelCase `basicView` from callers
-            basic_view = bool(
-                arguments.get("basic_view", arguments.get("basicView", False))
-            )
-
-            if not query:
-                return [TextContent(type="text", text="错误：搜索查询不能为空")]
-
-            logger.info(f"收到搜索请求: query={query}, limit={limit}, timeout={timeout}")
-
-            # 执行搜索
-            # Execute the search
             try:
-                # 使用超时控制防止无限等待
-                search_result = await asyncio.wait_for(
-                    google_search(
-                        query,
-                        CommandOptions(
-                            limit=limit,
-                            timeout=timeout,
-                            basic_view=basic_view,
-                        ),
-                    ),
-                    timeout=timeout / 1000 + 60,  # 搜索超时 + 60秒额外时间
+                result = await asyncio.wait_for(
+                    google_search(query, CommandOptions(limit=limit, timeout=timeout, basic_view=basic_view)),
+                    timeout=(timeout / 1000) + 10,
                 )
-
-                # 格式化结果
-                # Format results
-                result_text = f"搜索查询: {search_result.query}\n\n"
-                result_text += f"找到 {len(search_result.results)} 个结果:\n\n"
-
-                for i, result in enumerate(search_result.results, 1):
-                    result_text += f"{i}. {result.title}\n"
-                    result_text += f"   链接: {result.link}\n"
-                    result_text += f"   摘要: {result.snippet}\n\n"
-
-                # If the search result indicates a CAPTCHA failure, record the time so subsequent requests are cooled down
-                if (
-                    search_result.results
-                    and len(search_result.results) > 0
-                    and search_result.results[0].title.startswith(
-                        "Search failed (CAPTCHA)"
-                    )
-                ):
-                    # record last captcha time at module scope
-                    _last_captcha_time = time.time()
-
-                return [TextContent(type="text", text=result_text)]
-
-            except asyncio.TimeoutError:
-                return [
-                    TextContent(
-                        type="text", text=f"搜索超时: 查询 '{query}' 在 {timeout}ms 内未完成"
-                    )
-                ]
+                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
             except Exception as e:
-                logger.error(f"搜索失败: {e}")
+                logger.error(f"google-search failed: {e}")
                 return [TextContent(type="text", text=f"搜索失败: {str(e)}")]
 
         elif name == "get-webpage-html":
-            # 提取参数  # Extract parameters
             query = arguments.get("query", "")
-            save_to_file = arguments.get("saveToFile", False)
+            save_to_file = bool(arguments.get("saveToFile", False))
             output_path = arguments.get("outputPath")
 
             if not query:
                 return [TextContent(type="text", text="错误：搜索查询不能为空")]
 
-            logger.info(f"收到HTML获取请求: query={query}, saveToFile={save_to_file}")
-
-            # 获取HTML
-            # Fetch HTML
             try:
-                # 使用超时控制防止无限等待
                 html_result = await asyncio.wait_for(
-                    get_google_search_page_html(
-                        query, CommandOptions(), save_to_file, output_path
-                    ),
-                    timeout=60000 / 1000 + 60,  # 60秒超时 + 60秒额外时间
+                    get_google_search_page_html(query, CommandOptions(), save_to_file, output_path),
+                    timeout=60,
                 )
 
-                # 格式化结果
-                # Format HTML result
                 result_text = f"HTML获取成功\n\n"
                 result_text += f"查询: {html_result.query}\n"
                 result_text += f"URL: {html_result.url}\n"
@@ -223,20 +178,149 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
                 result_text += f"\nHTML内容预览 (前500字符):\n"
                 result_text += (
-                    html_result.html[:500] + "..."
-                    if len(html_result.html) > 500
-                    else html_result.html
+                    html_result.html[:500] + "..." if len(html_result.html) > 500 else html_result.html
                 )
 
                 return [TextContent(type="text", text=result_text)]
-
             except asyncio.TimeoutError:
-                return [
-                    TextContent(type="text", text=f"HTML获取超时: 查询 '{query}' 在60秒内未完成")
-                ]
+                return [TextContent(type="text", text=f"HTML获取超时: 查询 '{query}' 在60秒内未完成")]
             except Exception as e:
                 logger.error(f"HTML获取失败: {e}")
                 return [TextContent(type="text", text=f"HTML获取失败: {str(e)}")]
+
+        elif name == "get-webpage-markdown":
+            url = arguments.get("url", "")
+            query = arguments.get("query")
+            timeout = int(arguments.get("timeout", 60000))
+            save_screenshot = bool(arguments.get("saveScreenshot", True))
+            output_path = arguments.get("outputPath")
+
+            if not url:
+                return [TextContent(type="text", text="错误：url 不能为空")]
+
+            logger.info(f"收到网页提炼请求: url={url}, query={query}, timeout={timeout}")
+
+            # parse use_basic_view flag (support camelCase alias)
+            use_basic_view = bool(arguments.get("use_basic_view", arguments.get("useBasicView", False)))
+
+            browser_manager = BrowserManager()
+            search_executor = SearchExecutor()
+
+            # Concurrency: queue and wait for available crawl slot
+            logger.info(f"[INFO] Queueing crawl for {url}...")
+            await _crawl_semaphore.acquire()
+
+            p = None
+            context = None
+            page = None
+            screenshot_path = None
+            acquired = True
+            try:
+                # Enforce per-domain politeness delay using a per-domain lock
+                domain = urlparse(url).netloc.lower()
+                lock = _domain_locks.get(domain)
+                if lock is None:
+                    lock = asyncio.Lock()
+                    _domain_locks[domain] = lock
+
+                async with lock:
+                    last = _last_crawl_times.get(domain)
+                    now = time.time()
+                    if last and now - last < _POLITENESS_DELAY_SECONDS:
+                        to_wait = _POLITENESS_DELAY_SECONDS - (now - last)
+                        logger.info(f"[INFO] Politeness delay for {domain}: sleeping {to_wait:.2f}s")
+                        await asyncio.sleep(to_wait)
+                    # record this crawl start time
+                    _last_crawl_times[domain] = time.time()
+
+                # Launch a persistent context and create a page
+                p, context = await browser_manager.launch_browser(True, timeout, "en-US")
+                page = await browser_manager.create_page(context)
+
+                try:
+                    response = await page.goto(url, timeout=timeout, wait_until="networkidle")
+                except Exception as nav_e:
+                    logger.error(f"Navigation to {url} failed: {nav_e}")
+                    return [
+                        TextContent(
+                            type="text",
+                            text=json.dumps({"error": {"reason": "navigation_failed", "message": str(nav_e)}}, ensure_ascii=False),
+                        )
+                    ]
+
+                status = None
+                try:
+                    status = response.status if response else None
+                except Exception:
+                    status = None
+
+                if status and status >= 400:
+                    err_obj = {"error": {"reason": "http_error", "status": status, "url": url}}
+                    return [TextContent(type="text", text=json.dumps(err_obj, ensure_ascii=False))]
+
+                if search_executor.is_blocked_page(page.url, response.url if response else None):
+                    err_obj = {"error": {"reason": "blocked", "message": "Blocked by CAPTCHA or verification page", "url": page.url}}
+                    return [TextContent(type="text", text=json.dumps(err_obj, ensure_ascii=False))]
+
+                if save_screenshot:
+                    out_dir = Path(output_path) if output_path else Path("mcp_html_output")
+                    if out_dir.is_file():
+                        out_dir = out_dir.parent
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    ts = int(time.time())
+                    screenshot_path = str(out_dir / f"screenshot_{ts}.png")
+                    try:
+                        await page.screenshot(path=screenshot_path, full_page=True)
+                    except Exception as ss_e:
+                        logger.warning(f"Screenshot failed: {ss_e}")
+                        screenshot_path = None
+
+                distiller = ContentDistiller(context=context, page=page)
+                distill_result = await distiller.distill(url, query=query, basic_view=use_basic_view)
+
+                out = {
+                    "markdown": distill_result.get("markdown", ""),
+                    "metadata": {
+                        "title": distill_result.get("title", ""),
+                        "url": distill_result.get("url", url),
+                        "extraction_method": distill_result.get("method", "fallback"),
+                    },
+                    "screenshot_path": screenshot_path,
+                }
+
+                # Progress logging with strategy
+                strategy = distill_result.get("method", "fallback") if isinstance(distill_result, dict) else "fallback"
+                logger.info(f"[INFO] Crawl completed for {url} using {strategy}")
+
+                return [TextContent(type="text", text=json.dumps(out, ensure_ascii=False))]
+
+            except Exception as e:
+                logger.error(f"网页提炼失败: {e}")
+                return [
+                    TextContent(type="text", text=json.dumps({"error": {"reason": "exception", "message": str(e)}}, ensure_ascii=False))
+                ]
+            finally:
+                # release global crawl semaphore
+                try:
+                    if acquired:
+                        _crawl_semaphore.release()
+                except Exception:
+                    pass
+                try:
+                    if page is not None:
+                        await safe_close_page(page)
+                except Exception:
+                    pass
+                try:
+                    if context is not None:
+                        await safe_close_context(context)
+                except Exception:
+                    pass
+                try:
+                    if p is not None:
+                        await safe_stop_playwright(p)
+                except Exception:
+                    pass
 
         else:
             return [TextContent(type="text", text=f"未知工具: {name}")]

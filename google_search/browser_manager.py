@@ -54,6 +54,11 @@ from .fingerprint import get_host_machine_config, get_device_config, playwright_
 from .utils import safe_stop_playwright
 
 
+# Limit concurrent crawls to avoid high-entropy traffic that triggers CAPTCHAs
+# Running too many simultaneous headless tabs on a small VPS/home server is noisy
+MAX_CONCURRENT_CRAWLS = 2
+
+
 def _detect_locale_timezone(user_locale: Optional[str] = None) -> Tuple[str, str]:
     """Detect host locale and timezone id (best-effort).
 
@@ -669,6 +674,45 @@ class BrowserManager:
 
     def get_system_locale_timezone(self) -> Tuple[str, str]:
         return _detect_locale_timezone(None)
+
+    async def export_context_state(
+        self, context: BrowserContext, as_file: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Export the active BrowserContext storage state for external crawlers.
+
+        Returns a dict matching Playwright's storageState (cookies + origins/localStorage).
+        If `as_file` is provided, the JSON will also be written to that path.
+
+        This is intended for tools like Crawl4AI to "attach" to an existing authenticated
+        session by reusing cookies and localStorage. The caller should ensure the
+        returned state is handled securely.
+        """
+        try:
+            # Playwright API: context.storage_state() returns a dict when no path provided
+            state = await context.storage_state()
+
+            # Some older/playwright wrappers may return JSON string; normalize
+            if isinstance(state, str):
+                try:
+                    state_dict = json.loads(state)
+                except Exception:
+                    state_dict = {"raw": state}
+            else:
+                state_dict = state
+
+            if as_file:
+                out_path = Path(as_file)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    with open(out_path, "w", encoding="utf-8") as f:
+                        json.dump(state_dict, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    logger.error(f"Failed to write context state to {as_file}: {e}")
+
+            return state_dict
+        except Exception as e:
+            logger.error(f"Failed to export context state: {e}")
+            return {}
 
 
 # end of file
