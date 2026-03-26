@@ -61,6 +61,18 @@ async def list_tools() -> List[Tool]:
                         "description": "搜索操作的超时时间(毫秒) (默认: 30000，可根据网络状况调整)",
                         "default": 30000
                     }
+                    ,
+                    "basic_view": {
+                        "type": "boolean",
+                        "description": "是否请求 Google 基本视图 (gbv=1)。在某些验证码/阻断情况下，Basic View 会作为回退选项使用。",
+                        "default": False
+                    }
+                    ,
+                    "basicView": {
+                        "type": "boolean",
+                        "description": "Alias for basic_view (camelCase). Whether to request Google Basic View (gbv=1).",
+                        "default": False
+                    }
                 },
                 "required": ["query"]
             }
@@ -114,6 +126,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             query = arguments.get("query", "") # 搜索查询字符串, 必填  # Search query string, required
             limit = arguments.get("limit", 10) # 默认返回10个结果  # Default to 10 results
             timeout = arguments.get("timeout", 30000) # 默认30秒超时  # Default 30s timeout
+            # Accept either snake_case `basic_view` or camelCase `basicView` from callers
+            basic_view = bool(arguments.get("basic_view", arguments.get("basicView", False)))
 
             if not query:
                 return [TextContent(
@@ -132,7 +146,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                         query,
                         CommandOptions(
                             limit=limit,
-                            timeout=timeout
+                            timeout=timeout,
+                            basic_view=basic_view,
                         )
                     ),
                     timeout=timeout / 1000 + 60  # 搜索超时 + 60秒额外时间
