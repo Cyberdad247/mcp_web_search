@@ -13,10 +13,10 @@ import sys
 import time
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+from dataclasses import asdict
 
 from mcp.server import Server
-import uvicorn
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
@@ -38,6 +38,11 @@ from google_search.search_executor import SearchExecutor
 from google_search.utils import safe_stop_playwright, safe_close_context, safe_close_page
 from common.types import CommandOptions
 from common import logger
+
+# Ensure a sane default locale inside the process so logs and Playwright
+# default locale don't unexpectedly pick up container/system locale.
+os.environ.setdefault("LANG", "en_US.UTF-8")
+os.environ.setdefault("LC_ALL", "en_US.UTF-8")
 
 
 # 创建MCP服务器实例
@@ -133,7 +138,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             timeout = int(arguments.get("timeout", 30000))
             basic_view = bool(arguments.get("basic_view", arguments.get("basicView", False)))
 
-            global _last_captcha_time
             if time.time() - _last_captcha_time < _captcha_cooldown_seconds:
                 return [
                     TextContent(
@@ -147,7 +151,13 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     google_search(query, CommandOptions(limit=limit, timeout=timeout, basic_view=basic_view)),
                     timeout=(timeout / 1000) + 10,
                 )
-                return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
+                # Convert dataclass result to a JSON-serializable dict
+                try:
+                    result_obj = asdict(result)
+                except Exception:
+                    # Fallback: if result already serializable
+                    result_obj = result
+                return [TextContent(type="text", text=json.dumps(result_obj, ensure_ascii=False))]
             except Exception as e:
                 logger.error(f"google-search failed: {e}")
                 return [TextContent(type="text", text=f"搜索失败: {str(e)}")]
@@ -166,7 +176,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     timeout=60,
                 )
 
-                result_text = f"HTML获取成功\n\n"
+                result_text = "HTML获取成功\n\n"
                 result_text += f"查询: {html_result.query}\n"
                 result_text += f"URL: {html_result.url}\n"
                 result_text += f"HTML长度: {html_result.original_html_length} 字符\n"
@@ -177,7 +187,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 if html_result.screenshot_path:
                     result_text += f"截图路径: {html_result.screenshot_path}\n"
 
-                result_text += f"\nHTML内容预览 (前500字符):\n"
+                result_text += "\nHTML内容预览 (前500字符):\n"
                 result_text += (
                     html_result.html[:500] + "..." if len(html_result.html) > 500 else html_result.html
                 )
