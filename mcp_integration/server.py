@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp.server import Server
-from mcp.server.fastapi import FastApiServer
 import uvicorn
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
@@ -44,8 +43,6 @@ from common import logger
 # 创建MCP服务器实例
 # Create MCP server instance
 server = Server("google-search-server")
-# Expose a FastAPI bridge so the MCP server can be hosted over HTTP/SSE
-app = FastApiServer(server)
 
 # Cooldown tracking to avoid rapid repeated searches after CAPTCHA
 # Timestamp (epoch seconds) of last detected CAPTCHA
@@ -399,25 +396,51 @@ async def main():
         "启动Google搜索MCP服务器...  (Starting Google Search MCP server)"
     )  # Starting Google Search MCP server...
 
-    # 启动服务器: 使用 stdio (默认) 或通过网络的 SSE/HTTP（MCP_SSE=1）
-    if os.getenv("MCP_SSE", "0") == "1":
-        # Use the FastApiServer bridge so the MCP server is reachable over HTTP/SSE
-        # This avoids calling low-level mcp.run() which is stdio-only.
-        from mcp.server.fastapi import FastApiServer
-        import uvicorn
+    # Default: stdio transport (MCP over stdin/stdout)
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(read_stream, write_stream, server.create_initialization_options())
 
-        app = FastApiServer(server)
+def serve_sse():
+    """Synchronous entrypoint to run the Starlette/uvicorn server for SSE.
 
-        host = os.getenv("MCP_SSE_HOST", "0.0.0.0")
-        port = int(os.getenv("MCP_SSE_PORT", "8000"))
+    This must be synchronous because `uvicorn.run()` manages the event loop
+    itself and cannot be called from within `asyncio.run()`.
+    """
+    from starlette.applications import Starlette
+    from starlette.routing import Route, Mount
+    from starlette.responses import Response
+    from mcp.server.sse import SseServerTransport
+    import uvicorn
 
-        logger.info(f"Starting SSE/HTTP MCP server on {host}:{port}")
-        uvicorn.run(app, host=host, port=port)
-    else:
-        # Default: stdio transport (MCP over stdin/stdout)
-        async with stdio_server() as (read_stream, write_stream):
+    sse = SseServerTransport("/messages/")
+
+    async def handle_sse(request):
+        async with sse.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):
             await server.run(read_stream, write_stream, server.create_initialization_options())
+        return Response()
+
+    async def health(request):
+        return Response("ok", status_code=200)
+
+    routes = [
+        Route("/sse", endpoint=handle_sse, methods=["GET"]),
+        Route("/health", endpoint=health, methods=["GET"]),
+        Mount("/messages/", app=sse.handle_post_message),
+    ]
+
+    starlette_app = Starlette(routes=routes)
+
+    host = os.getenv("MCP_SSE_HOST", "0.0.0.0")
+    port = int(os.getenv("MCP_SSE_PORT", "8000"))
+
+    logger.info(f"Starting SSE/HTTP MCP server on {host}:{port}")
+    uvicorn.run(starlette_app, host=host, port=port)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # If requested, run as an SSE/HTTP server. This path must be synchronous
+    # because `uvicorn.run()` starts its own event loop.
+    if os.getenv("MCP_SSE", "0") == "1":
+        serve_sse()
+    else:
+        asyncio.run(main())
