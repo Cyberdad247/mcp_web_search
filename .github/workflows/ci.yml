@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          npx playwright install chromium
+
+      - name: CLI smoke test (version)
+        run: |
+          python cli.py -V
+
+      - name: CLI smoke test (simple search)
+        run: |
+          python cli.py "github playwright" -l 1
+
+      - name: Run stdio MCP smoke test
+        run: |
+          python tests/smoke_mcp_call.py
+
+      - name: Build Dockerfile.ubuntu image (optional)
+        run: |
+          docker build -f Dockerfile.ubuntu -t mcp_web_search:ci .
+        env:
+          DOCKER_BUILDKIT: 1
