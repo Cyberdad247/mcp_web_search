@@ -136,6 +136,11 @@ def warning(message):
     _logger.warning(message)
 
 
+# Backwards-compatible alias: prefer `warning()` in new code
+def warn(message):
+    _logger.warning(message)
+
+
 def error(message):
     _logger.error(message)
 

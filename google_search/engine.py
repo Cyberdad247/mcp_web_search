@@ -167,7 +167,7 @@ async def _perform_search_internal(
                 search_executor=search_executor,
             )
         except CaptchaDetected as cpe:
-            logger.warn(
+            logger.warning(
                 f"CAPTCHA detected when using provided browser: {cpe}, url={cpe.url}"
             )
             return SearchResponse(
@@ -232,7 +232,7 @@ async def _perform_search_internal(
                         pass
         except CaptchaDetected as cpe:
             last_error = cpe
-            logger.warn(f"CAPTCHA detected on attempt {attempt}: {cpe}, url={cpe.url}")
+            logger.warning(f"CAPTCHA detected on attempt {attempt}: {cpe}, url={cpe.url}")
             # Stop playwright/browser process for a clean restart
             if p is not None:
                 try:
@@ -272,7 +272,7 @@ async def _perform_search_internal(
                                 no_save_state,
                             )
                         except Exception as e:
-                            logger.warn(
+                            logger.warning(
                                 f"Failed to save browser state after manual CAPTCHA solve: {e}"
                             )
                     finally:
@@ -287,7 +287,7 @@ async def _perform_search_internal(
                     # Give a small grace period before retrying
                     await asyncio.sleep(2)
                 except Exception as man_e:
-                    logger.warn(f"Interactive CAPTCHA solve flow failed: {man_e}")
+                    logger.warning(f"Interactive CAPTCHA solve flow failed: {man_e}")
 
             # If we haven't tried the basic (gbv=1) fallback yet and we're not already in basic_view, try it once
             if not basic_view and not tried_basic_view:

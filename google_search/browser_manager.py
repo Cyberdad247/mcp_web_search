@@ -584,7 +584,7 @@ class BrowserManager:
                 except Exception as e:
                     # 无法加载指纹配置文件，将创建新的指纹
                     # Unable to load fingerprint file; will create a new fingerprint  # 无法加载指纹文件；将创建新的指纹
-                    logger.warn(
+                    logger.warning(
                         f"Unable to load fingerprint file; will create a new fingerprint: {e}"
                     )
         else:

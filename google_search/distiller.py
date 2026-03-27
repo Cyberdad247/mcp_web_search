@@ -81,7 +81,7 @@ class ContentDistiller:
                     crawler = None
 
             if crawler is None:
-                logger.warn("Could not instantiate AsyncWebCrawler with the provided context/page")
+                logger.warning("Could not instantiate AsyncWebCrawler with the provided context/page")
                 return None
 
             # Choose a strategy; prefer LLM-based structured extraction when available

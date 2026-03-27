@@ -104,7 +104,7 @@ class SearchExecutor:
             # 检查是否被重定向到人机验证页面
             current_url = page.url
             if self.is_blocked_page(current_url):
-                logger.warn(
+                logger.warning(
                     "方式1执行后检测到人机验证页面，尝试方式2  (Method 1 hit CAPTCHA, trying method 2)"
                 )
                 search_executed = False
@@ -112,7 +112,7 @@ class SearchExecutor:
                 logger.info("回车键搜索执行完成  (Enter-key search executed)")
                 search_executed = True
         except Exception as e:
-            logger.warn(
+            logger.warning(
                 f"回车键搜索失败，尝试其他方式: {e}  (Enter-key search failed, trying alternatives)"
             )
             search_executed = False
@@ -131,7 +131,7 @@ class SearchExecutor:
                     # 再次检查是否被重定向
                     current_url = page.url
                     if self.is_blocked_page(current_url):
-                        logger.warn(
+                        logger.warning(
                             "方式2执行后检测到人机验证页面，尝试方式3  (Method 2 hit CAPTCHA, trying method 3)"
                         )
                         search_executed = False
@@ -139,10 +139,10 @@ class SearchExecutor:
                         logger.info("搜索按钮点击完成  (Search button click completed)")
                         search_executed = True
                 else:
-                    logger.warn("未找到搜索按钮  (Search button not found)")
+                    logger.warning("未找到搜索按钮  (Search button not found)")
                     search_executed = False
             except Exception as e:
-                logger.warn(f"搜索按钮点击失败: {e}  (Search button click failed)")
+                logger.warning(f"搜索按钮点击失败: {e}  (Search button click failed)")
                 search_executed = False
 
         # 方式3：如果前两种方式都失败，尝试表单提交
@@ -159,7 +159,7 @@ class SearchExecutor:
                     # 最后检查是否被重定向
                     current_url = page.url
                     if self.is_blocked_page(current_url):
-                        logger.warn(
+                        logger.warning(
                             "方式3执行后仍然检测到人机验证页面  (Method 3 still encountered CAPTCHA)"
                         )
                         search_executed = False
@@ -167,10 +167,10 @@ class SearchExecutor:
                         logger.info("表单提交完成  (Form submission completed)")
                         search_executed = True
                 else:
-                    logger.warn("未找到搜索表单  (Search form not found)")
+                    logger.warning("未找到搜索表单  (Search form not found)")
                     search_executed = False
             except Exception as e:
-                logger.warn(f"表单提交失败: {e}  (Form submission failed)")
+                logger.warning(f"表单提交失败: {e}  (Form submission failed)")
                 search_executed = False
 
         if not search_executed:
@@ -242,7 +242,7 @@ class SearchExecutor:
 
                 except Exception as e:
                     last_error = e
-                    logger.warn(
+                    logger.warning(
                         f"选择器等待失败，继续尝试下一个: selector={selector}, error={str(e)}  (Selector wait failed; trying next)"
                     )
         else:

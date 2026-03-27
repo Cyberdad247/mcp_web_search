@@ -77,7 +77,7 @@ async def safe_close_browser(browser, browser_name: str = "浏览器") -> None:
             )
         else:
             # 其他错误需要警告
-            logger.warn(
+            logger.warning(
                 f"关闭{browser_name}时发生错误: {e}  (Error closing {browser_name}: {e})"
             )
 
@@ -116,7 +116,7 @@ async def safe_stop_playwright(
             )
         else:
             # 其他错误需要警告
-            logger.warn(
+            logger.warning(
                 f"停止{instance_name}时发生错误: {e}  (Error stopping {instance_name}: {e})"
             )
 
@@ -129,7 +129,7 @@ async def safe_close_context(context, context_name: str = "浏览器上下文") 
         await context.close()
         logger.info(f"{context_name}已成功关闭  ({context_name} closed successfully)")
     except Exception as e:
-        logger.warn(f"关闭{context_name}时发生错误: {e}  (Error closing {context_name}: {e})")
+        logger.warning(f"关闭{context_name}时发生错误: {e}  (Error closing {context_name}: {e})")
 
 
 async def safe_close_page(page, page_name: str = "页面") -> None:
@@ -140,7 +140,7 @@ async def safe_close_page(page, page_name: str = "页面") -> None:
         await page.close()
         logger.info(f"{page_name}已成功关闭  ({page_name} closed successfully)")
     except Exception as e:
-        logger.warn(f"关闭{page_name}时发生错误: {e}  (Error closing {page_name}: {e})")
+        logger.warning(f"关闭{page_name}时发生错误: {e}  (Error closing {page_name}: {e})")
 
 
 def suppress_platform_resource_warnings():
