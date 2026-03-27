@@ -1,6 +1,7 @@
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
 # Install system packages and runtime dependencies for Playwright/Chromium
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,6 +27,9 @@ RUN ln -sf /usr/bin/chromium /usr/bin/chromium-browser || true
 WORKDIR /app
 COPY . .
 
+# Ensure Python can import local packages in the workspace
+ENV PYTHONPATH="/app"
+
 # Prevent Playwright from downloading browsers (we use system Chromium)
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV BROWSER_PATH=/usr/bin/chromium-browser
@@ -40,5 +44,5 @@ RUN python3 -m venv /opt/venv \
 # Ensure the venv Python is first in PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Run the MCP server inside a virtual X frame buffer
-ENTRYPOINT ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x960x24", "python", "-m", "mcp_integration.server"]
+# Run the MCP server inside a virtual X frame buffer using the venv python
+ENTRYPOINT ["xvfb-run", "--auto-servernum", "--server-args=-screen 0 1280x960x24", "/opt/venv/bin/python3", "-m", "mcp_integration.server"]

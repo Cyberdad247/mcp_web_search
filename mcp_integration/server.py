@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp.server import Server
+from mcp.server.fastapi import FastApiServer
+import uvicorn
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
@@ -42,6 +44,8 @@ from common import logger
 # 创建MCP服务器实例
 # Create MCP server instance
 server = Server("google-search-server")
+# Expose a FastAPI bridge so the MCP server can be hosted over HTTP/SSE
+app = FastApiServer(server)
 
 # Cooldown tracking to avoid rapid repeated searches after CAPTCHA
 # Timestamp (epoch seconds) of last detected CAPTCHA
@@ -395,39 +399,20 @@ async def main():
         "启动Google搜索MCP服务器...  (Starting Google Search MCP server)"
     )  # Starting Google Search MCP server...
 
-    # 启动服务器: 支持两种传输 — stdio (默认) 和 SSE (通过环境变量启用)
+    # 启动服务器: 使用 stdio (默认) 或通过网络的 SSE/HTTP（MCP_SSE=1）
     if os.getenv("MCP_SSE", "0") == "1":
-        # SSE transport: create Starlette app with SSE endpoints and run via uvicorn
-        from mcp.server.sse import SseServerTransport
-        from starlette.responses import Response
-        from starlette.routing import Mount, Route
-        from starlette.applications import Starlette
+        # Use the FastApiServer bridge so the MCP server is reachable over HTTP/SSE
+        # This avoids calling low-level mcp.run() which is stdio-only.
+        from mcp.server.fastapi import FastApiServer
         import uvicorn
 
-        sse = SseServerTransport("/messages/")
+        app = FastApiServer(server)
 
-        async def handle_sse(scope, receive, send):
-            async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
-                await server.run(read_stream, write_stream, server.create_initialization_options())
-            return Response()
-
-        async def sse_endpoint(request):
-            # adapter to call ASGI-style handler from Starlette Request
-            return await handle_sse(request.scope, request.receive, request._send)  # type: ignore[reportPrivateUsage]
-
-        routes = [
-            Route("/sse", endpoint=sse_endpoint, methods=["GET"]),
-            Mount("/messages/", app=sse.handle_post_message),
-        ]
-
-        app = Starlette(debug=False, routes=routes)
-
-        host = os.getenv("MCP_SSE_HOST", "127.0.0.1")
+        host = os.getenv("MCP_SSE_HOST", "0.0.0.0")
         port = int(os.getenv("MCP_SSE_PORT", "8000"))
 
-        config = uvicorn.Config(app, host=host, port=port, log_level="info")
-        server_uv = uvicorn.Server(config)
-        await server_uv.serve()
+        logger.info(f"Starting SSE/HTTP MCP server on {host}:{port}")
+        uvicorn.run(app, host=host, port=port)
     else:
         # Default: stdio transport (MCP over stdin/stdout)
         async with stdio_server() as (read_stream, write_stream):
