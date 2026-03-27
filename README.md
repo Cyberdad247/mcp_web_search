@@ -21,7 +21,7 @@ A Playwright-based Python tool that bypasses search engine anti-scraping mechani
 
 ## Technical Features
 
-- **Developed with Python 3.8+**, providing excellent performance and wide compatibility
+- **Developed with Python 3.12+**, providing excellent performance and wide compatibility (see `Dockerfile.ubuntu`)
 - Browser automation based on **Playwright**, supporting multiple browser engines
 - Command-line parameter support for search keywords
 - **MCP server support** for AI assistant integration
@@ -70,7 +70,7 @@ python cli.py --get-html --save-html "search keywords"
 
 ```bash
 # Configure model API KEY and other information in dotenv.env
-# USE MCP server
+# Run MCP client (example)
 python -m mcp_integration.client
 ```
 
@@ -79,9 +79,10 @@ python -m mcp_integration.client
 - `-l, --limit <number>`: Result count limit (default: 10)
 - `-t, --timeout <number>`: Timeout time in milliseconds (default: 30000)
 - `--no-headless`: Show browser interface (for debugging)
-- `--remote-debugging-port <number>`: Enable remote debugging port (default: 9222)
 - `--state-file <path>`: Browser state file path (default: ./browser-state.json)
 - `--no-save-state`: Don't save browser state
+- `-b, --basic-view, --gbv`: Use Google Basic Variant (gbv=1)
+- `--manual-captcha`: Allow interactive manual CAPTCHA solving
 - `--get-html`: Get raw HTML of search result page instead of parsed results
 - `--save-html`: Save HTML to file (use with --get-html)
 - `--html-output <path>`: Specify HTML output file path (use with --get-html and --save-html)
@@ -116,29 +117,29 @@ python -m mcp_integration.client
 
 #### HTML Output Example
 
-When using the `--get-html` option, the output will contain HTML content-related information:
+When using the `--get-html` option, the function returns an `HtmlResponse`-like object. Example JSON fields (snake_case to match code):
 
 ```json
 {
   "query": "playwright automation",
   "url": "https://www.google.com/",
-  "originalHtmlLength": 1291733,
-  "cleanedHtmlLength": 456789,
-  "htmlPreview": "<!DOCTYPE html><html itemscope=\"\" itemtype=\"http://schema.org/SearchResultsPage\" lang=\"zh-CN\"><head><meta charset=\"UTF-8\"><meta content=\"dark light\" name=\"color-scheme\"><meta content=\"origin\" name=\"referrer\">..."
+  "original_html_length": 1291733,
+  "html": "<!DOCTYPE html><html itemscope=\"\" itemtype=\"http://schema.org/SearchResultsPage\" lang=\"zh-CN\">...",
+  "saved_path": null,
+  "screenshot_path": null
 }
 ```
 
-If you also use the `--save-html` option, the output will also include the HTML saved file path:
+If you use the `--save-html` option, the output will include `saved_path` and possibly `screenshot_path`:
 
 ```json
 {
   "query": "playwright automation",
   "url": "https://www.google.com/",
-  "originalHtmlLength": 1292241,
-  "cleanedHtmlLength": 458976,
-  "savedPath": "./google-search-html/playwright_automation-2025-04-06T03-30-06-852Z.html",
-  "screenshotPath": "./google-search-html/playwright_automation-2025-04-06T03-30-06-852Z.png",
-  "htmlPreview": "<!DOCTYPE html><html itemscope=\"\" itemtype=\"http://schema.org/SearchResultsPage\" lang=\"zh-CN\">..."
+  "original_html_length": 1292241,
+  "html": "<!DOCTYPE html>...",
+  "saved_path": "./google-search-html/playwright_automation-2025-04-06T03-30-06-852Z.html",
+  "screenshot_path": "./google-search-html/playwright_automation-2025-04-06T03-30-06-852Z.png"
 }
 ```
 
@@ -151,17 +152,15 @@ This project provides Model Context Protocol (MCP) server functionality, allowin
 1. Edit Claude Desktop configuration file
    - Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-     - Usually located at `C:\Users\username\AppData\Roaming\Claude\claude_desktop_config.json`
-     - You can enter `%APPDATA%\Claude` in Windows Explorer address bar to access directly
 
-2. Add server configuration and restart Claude
+2. Add server configuration and restart Claude. Example uses module invocation so Claude runs the MCP server process:
 
 ```json
 {
   "mcpServers": {
     "google-search": {
       "command": "python",
-      "args": ["mcp_server_simple.py"]
+      "args": ["-m", "mcp_integration.server"]
     }
   }
 }
@@ -172,7 +171,7 @@ After integration, you can directly use search functionality in Claude, such as 
 ## Project Structure
 
 ```
-google-search/
+google_search/
 ├── Core Functions/
 │   ├── google_search/
 │   │   ├── engine.py              # Search engine implementation
@@ -207,7 +206,7 @@ google-search/
 │   ├── .vscode/                    # VS Code configuration
 │   └── logs/                       # Application logs
 └── Other/
-    └── __pycache__/                # Python cache files
+  └── __pycache__/                # Python cache files
 ```
 
 ## Technology Stack
@@ -226,17 +225,17 @@ All commands can be run in the project root directory:
 # Install dependencies
 pip install -r requirements.txt
 
-# Install Playwright browsers
+# Install Playwright browsers (when running locally)
 playwright install chromium
 
 # Run CLI tool
 python cli.py "search keywords"
 
-# Start MCP server
-python mcp_server_simple.py
+# Start MCP server (SSE/HTTP mode or stdio transport depending on env)
+python -m mcp_integration.server
 
 # Test MCP client
-python mcp_client_enhanced.py
+python -m mcp_integration.client
 ```
 
 ## Error Handling
