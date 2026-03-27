@@ -132,6 +132,10 @@ def warn(message):
     _logger.warning(message)
 
 
+def warning(message):
+    _logger.warning(message)
+
+
 def error(message):
     _logger.error(message)
 

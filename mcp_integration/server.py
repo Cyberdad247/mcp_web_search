@@ -130,7 +130,7 @@ async def list_tools() -> List[Tool]:
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
     try:
         if name == "google-search":
             query = arguments.get("query", "")
@@ -274,7 +274,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     err_obj = {"error": {"reason": "http_error", "status": status, "url": url}}
                     return [TextContent(type="text", text=json.dumps(err_obj, ensure_ascii=False))]
 
-                if search_executor.is_blocked_page(page.url, response.url if response else None):
+                if search_executor.is_blocked_page(page.url, response.url if response and getattr(response, "url", None) else ""):
                     err_obj = {"error": {"reason": "blocked", "message": "Blocked by CAPTCHA or verification page", "url": page.url}}
                     return [TextContent(type="text", text=json.dumps(err_obj, ensure_ascii=False))]
 
