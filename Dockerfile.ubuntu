@@ -34,6 +34,7 @@ ENV DISPLAY=:99
 # Create a virtual environment and install Python requirements into it
 RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir fastapi uvicorn \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Ensure the venv Python is first in PATH
