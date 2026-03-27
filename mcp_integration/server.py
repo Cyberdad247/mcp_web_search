@@ -151,13 +151,18 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     google_search(query, CommandOptions(limit=limit, timeout=timeout, basic_view=basic_view)),
                     timeout=(timeout / 1000) + 10,
                 )
-                # Convert dataclass result to a JSON-serializable dict
+                # Convert dataclass result to a JSON-serializable dict and
+                # return it as structured content (dict) so the MCP layer
+                # does a single JSON encoding. Returning a dict here
+                # avoids double-encoding JSON strings inside `TextContent`.
                 try:
                     result_obj = asdict(result)
                 except Exception:
-                    # Fallback: if result already serializable
                     result_obj = result
-                return [TextContent(type="text", text=json.dumps(result_obj, ensure_ascii=False))]
+                # Return structured content (dict) directly. The MCP
+                # server will include an unstructured text fallback
+                # automatically when packaging the response.
+                return result_obj
             except Exception as e:
                 logger.error(f"google-search failed: {e}")
                 return [TextContent(type="text", text=f"搜索失败: {str(e)}")]
