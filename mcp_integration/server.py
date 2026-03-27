@@ -151,17 +151,29 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
             try:
                 async with browser_manager.get_page_context() as (context, page):
                     result = await asyncio.wait_for(
-                        google_search(query, CommandOptions(limit=limit, timeout=timeout, basic_view=basic_view), existing_browser=context),
+                        google_search(
+                            query,
+                            CommandOptions(limit=limit, timeout=timeout, basic_view=basic_view),
+                            existing_browser=context,  # type: ignore[arg-type]
+                        ),
                         timeout=(timeout / 1000) + 10,
                     )
                     try:
                         result_obj = asdict(result)
                     except Exception:
-                        # Fallback: try to convert to dict-like
-                        try:
-                            result_obj = dict(result)
-                        except Exception:
+                        # Fallback: convert result to a JSON-serializable form
+                        if isinstance(result, dict):
                             result_obj = result
+                        else:
+                            to_dict_fn = getattr(result, "to_dict", None)
+                            if callable(to_dict_fn):
+                                try:
+                                    result_obj = to_dict_fn()
+                                except Exception:
+                                    result_obj = getattr(result, "__dict__", str(result))
+                            else:
+                                result_obj = getattr(result, "__dict__", str(result))
+                        
                     text = json.dumps(result_obj, ensure_ascii=False)
                     return [TextContent(type="text", text=text)]
             except Exception as e:
@@ -185,9 +197,10 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
                     # perform search
                     try:
                         search_input = await page.wait_for_selector("textarea[name='q'], input[name='q']", timeout=5000)
-                        await search_input.click()
-                        await page.keyboard.type(query, delay=10)
-                        await page.keyboard.press("Enter")
+                        if search_input is not None:
+                            await search_input.click()
+                            await page.keyboard.type(query, delay=10)
+                            await page.keyboard.press("Enter")
                     except Exception:
                         pass
                     await page.wait_for_load_state("networkidle", timeout=60000)

@@ -57,6 +57,25 @@ from .fingerprint import get_host_machine_config, get_device_config, playwright_
 from .utils import safe_stop_playwright
 from contextlib import asynccontextmanager
 
+# A small set of common, modern desktop User-Agent strings for rotation.
+# These are realistic examples (Chrome, Edge, Safari on popular desktop OSes).
+COMMON_USER_AGENTS = [
+    # Chrome on Windows 11
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    # Chrome on macOS Sonoma
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.4 Safari/605.1.15",
+    # Edge on Windows 10
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.0.0",
+    # Firefox on Windows 11
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:119.0) Gecko/20100101 Firefox/119.0",
+    # Chrome on Linux
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    # Safari on macOS Ventura
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Safari/605.1.15",
+    # Edge on macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36 Edg/118.0.0.0",
+]
+
 
 @asynccontextmanager
 async def _noop_ctx():
@@ -188,17 +207,32 @@ class BrowserManager:
         # coherent hardware profile  # 一致的硬件配置
         hw = _hardware_profile()
 
-        # ensure UA coherence: start from device user agent and avoid generic "Headless"  # 确保 UA 一致性：使用设备 UA，避免出现通用的 "Headless"
-        user_agent = device_config.get("user_agent") or (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+        # Rotate a realistic user-agent string to make automated traffic less uniform.
+        # Prefer a device-provided UA when available; otherwise pick one from the rotate list.
+        selected_ua = None
+        try:
+            # Always allow rotation; if device_config provides a fingerprint UA, include it as a candidate
+            candidates = list(COMMON_USER_AGENTS)
+            dev_ua = device_config.get("user_agent")
+            if dev_ua:
+                candidates.append(dev_ua)
+            selected_ua = random.choice(candidates)
+            logger.debug(f"Selected User-Agent: {selected_ua}")
+        except Exception:
+            # Fallback to a safe default
+            selected_ua = device_config.get("user_agent") or (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+        user_agent = selected_ua
 
         # Context creation options: persistent context accepts many of the same options  # 上下文创建选项：持久化上下文支持许多相同选项
+        # Bonus stealth: set a consistent locale/timezone to match expected geolocation
         ctx_kwargs: Dict[str, Any] = {
             "viewport": viewport,
             "user_agent": user_agent,
-            "locale": detected_locale,
-            "timezone_id": detected_tz,
+            # force locale and timezone to reduce fingerprint anomalies
+            "locale": "en-US",
+            "timezone_id": "America/Denver",
             "accept_downloads": True,
             "bypass_csp": False,
             "java_script_enabled": True,
@@ -846,6 +880,16 @@ class BrowserManager:
             # Launch browser/context via existing helper which in turn honors environment variables
             p, context = await self.launch_browser(headless, timeout, locale)
             page = await self.create_page(context)
+
+            # Introduce a small randomized delay before returning the page to callers.
+            # This breaks perfectly regular, bot-like timing between creating a page
+            # and immediately navigating, which helps avoid WAF/fingerprinting heuristics.
+            try:
+                await asyncio.sleep(random.uniform(1.5, 3.5))
+            except Exception:
+                # best-effort: if sleep is interrupted for any reason, continue
+                pass
+
             yield (context, page)
         finally:
             # Close page
